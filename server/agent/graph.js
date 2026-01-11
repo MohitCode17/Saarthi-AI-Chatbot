@@ -82,20 +82,38 @@ Otherwise, respond only with the word "RESPOND".`;
 
 function marketingSupport(state) {
   // Logic for frontdesk support
+  console.log("Handling by marketing team...");
   return state;
 }
 
 function learningSupport(state) {
   // Logic for frontdesk support
+  console.log("Handling by learning team...");
   return state;
+}
+
+function whoIsNextRepresentative(state) {
+  if (state.nextRepresentative.includes("MARKETING")) {
+    return "marketingSupport";
+  } else if (state.nextRepresentative.includes("LEARNING")) {
+    return "learningSupport";
+  } else {
+    return "__end__";
+  }
 }
 
 const graph = new StateGraph(StateAnnotation)
   .addNode("frontdeskSupport", frontdeskSupport)
-  // .addNode("marketingSupport", marketingSupport)
-  // .addNode("learningSupport", learningSupport)
+  .addNode("marketingSupport", marketingSupport)
+  .addNode("learningSupport", learningSupport)
   .addEdge("__start__", "frontdeskSupport")
-  .addEdge("frontdeskSupport", "__end__");
+  .addEdge("marketingSupport", "__end__")
+  .addEdge("learningSupport", "__end__")
+  .addConditionalEdges("frontdeskSupport", whoIsNextRepresentative, {
+    marketingSupport: "marketingSupport",
+    learningSupport: "learningSupport",
+    __end__: "__end__",
+  });
 
 const app = graph.compile();
 
@@ -104,7 +122,7 @@ async function main() {
     messages: [
       {
         role: "human",
-        content: "What is the total duration of genai course?",
+        content: "Hello, Do you have any discount coupon righ now?",
       },
     ],
   });
