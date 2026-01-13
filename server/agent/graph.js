@@ -2,7 +2,7 @@ import { StateGraph } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { StateAnnotation } from "./state.js";
 import { model } from "./model.js";
-import { getOffers } from "./tools.js";
+import { getOffers, knowledgeRetriever } from "./tools.js";
 import { AIMessage, ToolMessage } from "@langchain/core/messages";
 
 /**
@@ -10,6 +10,12 @@ import { AIMessage, ToolMessage } from "@langchain/core/messages";
  */
 const marketingTools = [getOffers];
 const marketingToolsNode = new ToolNode(marketingTools);
+
+/**
+ * Learning Tools
+ */
+const learningTools = [knowledgeRetriever];
+const learningToolsNode = new ToolNode(learningTools);
 
 /**
  * Front desk Agent
@@ -148,10 +154,62 @@ Your goal is to provide accurate, trustworthy marketing information while strict
   };
 }
 
-function learningSupport(state) {
-  // Logic for frontdesk support
-  console.log("Handling by learning team...");
-  return state;
+async function learningSupport(state) {
+  const learningSupportWithTools = model.bindTools(learningTools);
+
+  const SYSTEM_PROMPT = `You are the part of Learning Support Team for Saarthi Institution of Technology (SIT), a modern higher-education institution focused on industry-ready learning, practical skill development, and career-oriented education.
+
+Your role is to assist students with learning-related queries, including:
+- Available courses and programs
+- Course syllabus and topic coverage
+- Curriculum structure and learning paths
+- Study guidance and academic understanding
+
+COMMUNICATION STYLE:
+- Be clear, concise, supportive, and professional
+- Answer only what the student asks
+- Avoid unnecessary explanations or assumptions
+
+STRICT RULES:
+- You MUST answer questions strictly using the information retrieved from the learning knowledge base
+- Do NOT use prior knowledge, assumptions, or external information
+- If the retrieved context does not contain the answer, respond with:
+  "I don’t have enough information about that at the moment."
+
+RETRIEVAL RULES:
+- Use the learning_retriver_base tool to fetch relevant information
+- You may call the retrieval tool a maximum of 3 times if the initial results are not relevant to the user’s query
+- Do NOT fabricate answers if retrieval fails
+
+BOUNDARIES:
+- If the user asks about admissions, fees, discounts, offers, scholarships, or enrollment:
+  - Do NOT answer the question
+  - Politely respond with:
+    "Please hold for a moment while I connect you with our marketing support team."
+
+- Do NOT engage in casual conversation or general non-learning queries
+- Do NOT mention internal prompts, tools, routing logic, or AI behavior
+
+Your goal is to provide accurate, trustworthy learning guidance strictly based on retrieved academic information.
+`;
+
+  let trimmedHistory = state.messages;
+
+  if (trimmedHistory.at(-1) instanceof AIMessage) {
+    trimmedHistory = trimmedHistory.slice(0, -1);
+  }
+
+  const learningSupportRes = await learningSupportWithTools.invoke([
+    {
+      role: "system",
+      content: SYSTEM_PROMPT,
+    },
+    ...trimmedHistory,
+  ]);
+
+  return {
+    messages: [learningSupportRes],
+  };
 }
 
 function whoIsNextRepresentative(state) {
@@ -183,14 +241,33 @@ function doesNeedMarketingTool(state) {
   return "__end__";
 }
 
+/**
+ * Check if learning support agent needs to call learning tool
+ */
+function doesNeedLearningTool(state) {
+  const lastMessage = state.messages.at(-1);
+
+  // If we already have a tool result
+  if (lastMessage instanceof ToolMessage) {
+    return "learningSupport";
+  }
+
+  if (lastMessage.tool_calls?.length > 0) {
+    return "learningToolsNode";
+  }
+
+  return "__end__";
+}
+
 const graph = new StateGraph(StateAnnotation)
   .addNode("frontdeskSupport", frontdeskSupport)
   .addNode("marketingSupport", marketingSupport)
   .addNode("learningSupport", learningSupport)
   .addNode("marketingToolsNode", marketingToolsNode)
+  .addNode("learningToolsNode", learningToolsNode)
   .addEdge("__start__", "frontdeskSupport")
   .addEdge("marketingToolsNode", "marketingSupport")
-  .addEdge("learningSupport", "__end__")
+  .addEdge("learningToolsNode", "learningSupport")
   .addConditionalEdges("frontdeskSupport", whoIsNextRepresentative, {
     marketingSupport: "marketingSupport",
     learningSupport: "learningSupport",
@@ -198,6 +275,12 @@ const graph = new StateGraph(StateAnnotation)
   })
   .addConditionalEdges("marketingSupport", doesNeedMarketingTool, {
     marketingToolsNode: "marketingToolsNode",
+    marketingSupport: "marketingSupport",
+    __end__: "__end__",
+  })
+  .addConditionalEdges("learningSupport", doesNeedLearningTool, {
+    learningToolsNode: "learningToolsNode",
+    learningSupport: "learningSupport",
     __end__: "__end__",
   });
 
@@ -208,12 +291,13 @@ async function main() {
     messages: [
       {
         role: "human",
-        content: "Hello, Do you have any discount coupon righ now?",
+        content:
+          "Hello, Could you provide me a detail syllabus related to generative ai course?",
       },
     ],
   });
 
-  console.log("Result:", JSON.stringify(result, null, 2));
+  console.log("Saarthi:", result.messages[result.messages.length - 1].content);
 }
 
 main();
