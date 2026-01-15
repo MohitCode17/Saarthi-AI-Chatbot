@@ -18,6 +18,8 @@
     "@langchain/pinecone": "^1.0.1",
     "@langchain/textsplitters": "^1.0.1",
     "@pinecone-database/pinecone": "^5.1.2",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
     "pdf-parse": "^1.1.1",
     "zod": "^4.3.5"
   }

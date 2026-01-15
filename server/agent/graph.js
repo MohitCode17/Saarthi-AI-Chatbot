@@ -284,20 +284,4 @@ const graph = new StateGraph(StateAnnotation)
     __end__: "__end__",
   });
 
-const app = graph.compile();
-
-async function main() {
-  const result = await app.invoke({
-    messages: [
-      {
-        role: "human",
-        content:
-          "Hello, Could you provide me a detail syllabus related to generative ai course?",
-      },
-    ],
-  });
-
-  console.log("Saarthi:", result.messages[result.messages.length - 1].content);
-}
-
-main();
+export const agent = graph.compile();
