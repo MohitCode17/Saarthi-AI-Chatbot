@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import TypingIndicator from "./component/TypingIndicator";
 
 const App = () => {
   const chatEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const [messages, setMessages] = useState([
     {
@@ -18,12 +22,9 @@ const App = () => {
     const res = await fetch("http://localhost:3001/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message,
-      }),
+      body: JSON.stringify({ message }),
     });
-    const data = await res.json();
-    return data;
+    return res.json();
   };
 
   const handleSend = async () => {
@@ -35,14 +36,18 @@ const App = () => {
 
     try {
       const res = await callServer(input);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          agent: res.agent || "Frontdesk",
-          content: res.message,
-        },
-      ]);
+
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            agent: res.agent || "Frontdesk",
+            content: res.message,
+          },
+        ]);
+        setLoading(false);
+      }, 500);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -52,7 +57,6 @@ const App = () => {
           content: "Something went wrong. Please try again.",
         },
       ]);
-    } finally {
       setLoading(false);
     }
   };
@@ -92,14 +96,37 @@ const App = () => {
                   Saarthi • {msg.agent}
                 </div>
               )}
-              {msg.content}
+
+              <div className="prose prose-invert max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {msg.content}
+                </ReactMarkdown>
+              </div>
             </div>
           ))}
-          {loading && (
-            <div className="text-sm text-neutral-400 animate-pulse">
-              Saarthi is typing…
+
+          {/* 🔹 Quick actions (only at start) */}
+          {messages.length === 1 && (
+            <div className="flex gap-2 flex-wrap">
+              {[
+                "What courses do you offer?",
+                "Any discounts available?",
+                "How can I take admission?",
+              ].map((text) => (
+                <button
+                  key={text}
+                  onClick={() => setInput(text)}
+                  className="text-xs px-3 py-1 rounded-full bg-neutral-800 hover:bg-neutral-700 transition"
+                >
+                  {text}
+                </button>
+              ))}
             </div>
           )}
+
+          {/* 🔹 Typing animation */}
+          {loading && <TypingIndicator />}
+
           <div ref={chatEndRef} />
         </main>
 
@@ -107,15 +134,24 @@ const App = () => {
         <footer className="border-t border-white/10 p-4">
           <div className="flex gap-3">
             <textarea
+              ref={textareaRef}
               rows={1}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === "Enter" && !e.shiftKey && handleSend()
-              }
-              className="flex-1 resize-none rounded-lg bg-neutral-900 border border-neutral-700 px-4 py-2 text-sm"
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = e.target.scrollHeight + "px";
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              className="flex-1 resize-none rounded-lg bg-neutral-900 border border-neutral-700 px-4 py-2 text-sm overflow-hidden"
               placeholder="Ask about courses, offers, or support…"
             />
+
             <button
               onClick={handleSend}
               disabled={loading}
